@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dossier — personal data tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>Dossier</h1>
+      <p>Every service holding a piece of you, in one ledger — with the requests you've filed to get it back.</p>
+      <a href="/logout" class="logout-link">Log out</a>
+    </div>
+    <div class="score-block">
+      <div class="score-num" id="scoreNum">–</div>
+      <div class="score-label">privacy score</div>
+      <div class="score-bar"><div class="score-bar-fill" id="scoreBar" style="width:0%"></div></div>
+    </div>
+  </header>
+
+  <div class="charts-row">
+    <div class="chart-box">
+      <h4>Risk breakdown</h4>
+      <canvas id="riskChart" height="160"></canvas>
+    </div>
+    <div class="chart-box">
+      <h4>Score history</h4>
+      <canvas id="scoreChart" height="160"></canvas>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="services">Tracked services</button>
+    <button class="tab-btn" data-tab="requests">Data requests</button>
+    <button class="tab-btn" data-tab="scan">Scan an app</button>
+  </div>
+
+  <div class="panel active" id="panel-services">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <input type="text" id="searchServices" placeholder="Search services…">
+        <select id="filterCategory"><option value="">All categories</option></select>
+        <select id="filterRisk">
+          <option value="">All risk levels</option>
+          <option value="high">High risk</option>
+          <option value="medium">Medium risk</option>
+          <option value="low">Low risk</option>
+        </select>
+      </div>
+      <button class="btn" id="showServiceForm">+ Add service</button>
+    </div>
+
+    <div class="add-form" id="serviceForm">
+      <div class="form-grid">
+        <div class="field">
+          <label for="svcName">Service name</label>
+          <input type="text" id="svcName" placeholder="e.g. Instagram">
+        </div>
+        <div class="field">
+          <label for="svcCategory">Category</label>
+          <select id="svcCategory">
+            <option>Social</option>
+            <option>Finance</option>
+            <option>Shopping</option>
+            <option>Health</option>
+            <option>Utility</option>
+            <option>Work</option>
+            <option>Entertainment</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="svcData">Data they hold (comma separated)</label>
+          <input type="text" id="svcData" placeholder="email, photos, location">
+        </div>
+        <div class="field">
+          <label for="svcRisk">Risk level</label>
+          <select id="svcRisk">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="svcReviewed">Last reviewed</label>
+          <input type="date" id="svcReviewed">
+        </div>
+        <div class="field">
+          <label for="svcNotes">Notes (optional)</label>
+          <input type="text" id="svcNotes" placeholder="2FA enabled, ad personalization off…">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn ghost small" id="cancelServiceForm">Cancel</button>
+        <button class="btn small" id="saveService">Save service</button>
+      </div>
+    </div>
+
+    <table class="ledger" id="servicesTable">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Data held</th>
+          <th>Risk</th>
+          <th>Reviewed</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="servicesBody"></tbody>
+    </table>
+    <div class="empty-state" id="servicesEmpty" style="display:none;">
+      <p>No services logged yet</p>
+      <p>Add the accounts and apps that hold your data to start tracking your footprint.</p>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-requests">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <select id="filterReqStatus">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+          <option value="denied">Denied</option>
+        </select>
+      </div>
+      <button class="btn" id="showRequestForm">+ Log request</button>
+    </div>
+
+    <div class="add-form" id="requestForm">
+      <div class="form-grid">
+        <div class="field">
+          <label for="reqService">Service</label>
+          <input type="text" id="reqService" placeholder="e.g. Acme Analytics">
+        </div>
+        <div class="field">
+          <label for="reqType">Request type</label>
+          <select id="reqType">
+            <option value="export">Data export</option>
+            <option value="delete">Deletion</option>
+            <option value="access">Access / disclosure</option>
+            <option value="opt-out">Opt-out of sale</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="reqDate">Date filed</label>
+          <input type="date" id="reqDate">
+        </div>
+        <div class="field">
+          <label for="reqDueDate">Response due by</label>
+          <input type="date" id="reqDueDate">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="reqStatus">Status</label>
+          <select id="reqStatus">
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="denied">Denied</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reqNotes">Notes (optional)</label>
+          <input type="text" id="reqNotes" placeholder="Reference number…">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn ghost small" id="cancelRequestForm">Cancel</button>
+        <button class="btn small" id="saveRequest">Save request</button>
+      </div>
+    </div>
+
+    <table class="ledger" id="requestsTable">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Type</th>
+          <th>Filed</th>
+          <th>Due</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="requestsBody"></tbody>
+    </table>
+    <div class="empty-state" id="requestsEmpty" style="display:none;">
+      <p>No requests filed yet</p>
+      <p>Log the exports, deletions, and opt-outs you've requested, and keep track of what's outstanding.</p>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-scan">
+    <p class="scan-intro">
+      Look up real, previously-published tracker and permission data for an Android app,
+      sourced from the <a href="https://exodus-privacy.eu.org/en/" target="_blank" rel="noopener">εxodus Privacy</a>
+      audit platform. This is not live traffic monitoring — it's the most recent public audit report for that app.
+    </p>
+    <div class="scan-form">
+      <input type="text" id="scanHandle" placeholder="Android package name, e.g. com.instagram.android">
+      <button class="btn" id="scanBtn">Scan</button>
+    </div>
+    <div id="scanResult"></div>
+  </div>
+
+  <div class="foot-note">
+    <span>Stored in <code>data.json</code> on the server — nothing here leaves your machine.</span>
+    <div>
+      <button class="btn ghost small" id="exportJson">Export as JSON</button>
+      <button class="btn ghost small" id="exportPdf">Export as PDF</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}" defer></script>
+</body>
+</html>
