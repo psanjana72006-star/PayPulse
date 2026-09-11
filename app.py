@@ -1,9 +1,7 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 import json
 import os
-import time
 import uuid
-import requests
 from datetime import datetime, date
 from functools import wraps
 
@@ -14,32 +12,26 @@ APP_USERNAME = os.environ.get("APP_USERNAME", "admin")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "admin123")
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), 'data.json')
-
-EXODUS_BASE = "https://reports.exodus-privacy.eu.org"
-EXODUS_API_KEY = os.environ.get("EXODUS_API_KEY", "")
+LOCAL_DB_FILE = os.path.join(os.path.dirname(__file__), 'local_database.json')
 
 DANGEROUS_PERMISSIONS = {
-    "android.permission.READ_CONTACTS": "Read your contacts",
-    "android.permission.WRITE_CONTACTS": "Modify your contacts",
-    "android.permission.ACCESS_FINE_LOCATION": "Access precise location",
-    "android.permission.ACCESS_COARSE_LOCATION": "Access approximate location",
-    "android.permission.ACCESS_BACKGROUND_LOCATION": "Access location in the background",
-    "android.permission.CAMERA": "Use the camera",
-    "android.permission.RECORD_AUDIO": "Record audio",
-    "android.permission.READ_SMS": "Read your SMS messages",
-    "android.permission.SEND_SMS": "Send SMS messages",
-    "android.permission.READ_CALL_LOG": "Read your call log",
-    "android.permission.READ_PHONE_STATE": "Read phone status and identity",
-    "android.permission.READ_EXTERNAL_STORAGE": "Read files on your device",
-    "android.permission.WRITE_EXTERNAL_STORAGE": "Write files on your device",
-    "android.permission.BODY_SENSORS": "Access body sensor data",
-    "android.permission.GET_ACCOUNTS": "Access accounts on your device",
+    "ACCESS_FINE_LOCATION": "Access precise location",
+    "ACCESS_COARSE_LOCATION": "Access approximate location",
+    "ACCESS_BACKGROUND_LOCATION": "Access location in the background",
+    "CAMERA": "Use the camera",
+    "RECORD_AUDIO": "Record audio",
+    "READ_CONTACTS": "Read your contacts",
+    "WRITE_CONTACTS": "Modify your contacts",
+    "READ_SMS": "Read your SMS messages",
+    "SEND_SMS": "Send SMS messages",
+    "READ_CALL_LOG": "Read your call log",
+    "READ_PHONE_STATE": "Read phone status and identity",
+    "READ_EXTERNAL_STORAGE": "Read files on your device",
+    "WRITE_EXTERNAL_STORAGE": "Write files on your device",
+    "BODY_SENSORS": "Access body sensor data",
+    "GET_ACCOUNTS": "Access accounts on your device",
 }
 
-_tracker_cache = {"data": None, "fetched_at": 0}
-
-
-# ---------- Auth ----------
 
 def login_required(f):
     @wraps(f)
@@ -71,25 +63,6 @@ def logout():
     return redirect(url_for('login'))
 
 
-def _exodus_headers():
-    headers = {"User-Agent": "dossier-privacy-tracker/1.0"}
-    if EXODUS_API_KEY:
-        headers["Authorization"] = f"Token {EXODUS_API_KEY}"
-    return headers
-
-
-def get_tracker_map():
-    now = time.time()
-    if _tracker_cache["data"] is not None and now - _tracker_cache["fetched_at"] < 86400:
-        return _tracker_cache["data"]
-    resp = requests.get(f"{EXODUS_BASE}/api/trackers", headers=_exodus_headers(), timeout=10)
-    resp.raise_for_status()
-    trackers = resp.json().get("trackers", {})
-    _tracker_cache["data"] = trackers
-    _tracker_cache["fetched_at"] = now
-    return trackers
-
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"services": [], "requests": [], "scoreHistory": []}
@@ -104,15 +77,18 @@ def save_data(data):
         json.dump(data, f, indent=2)
 
 
-# ---------- Page ----------
+def load_local_db():
+    if not os.path.exists(LOCAL_DB_FILE):
+        return {}
+    with open(LOCAL_DB_FILE, 'r') as f:
+        return json.load(f)
+
 
 @app.route('/')
 @login_required
 def home():
     return render_template('index.html')
 
-
-# ---------- Services API ----------
 
 @app.route('/api/services', methods=['GET'])
 @login_required
@@ -126,11 +102,9 @@ def get_services():
 def add_service():
     data = load_data()
     body = request.get_json(force=True) or {}
-
     name = (body.get('name') or '').strip()
     if not name:
         return jsonify({"error": "name is required"}), 400
-
     service = {
         "id": uuid.uuid4().hex[:10],
         "name": name,
@@ -167,8 +141,6 @@ def delete_service(service_id):
     return '', 204
 
 
-# ---------- Requests API ----------
-
 @app.route('/api/requests', methods=['GET'])
 @login_required
 def get_requests():
@@ -181,11 +153,9 @@ def get_requests():
 def add_request():
     data = load_data()
     body = request.get_json(force=True) or {}
-
     service = (body.get('service') or '').strip()
     if not service:
         return jsonify({"error": "service is required"}), 400
-
     req = {
         "id": uuid.uuid4().hex[:10],
         "service": service,
@@ -209,8 +179,6 @@ def delete_request(request_id):
     return '', 204
 
 
-# ---------- Score history API ----------
-
 @app.route('/api/score-history', methods=['GET'])
 @login_required
 def get_score_history():
@@ -226,7 +194,6 @@ def add_score_snapshot():
     score = body.get('score')
     if score is None:
         return jsonify({"error": "score is required"}), 400
-
     today = date.today().isoformat()
     history = data.setdefault('scoreHistory', [])
     if history and history[-1]['date'] == today:
@@ -238,80 +205,33 @@ def add_score_snapshot():
     return jsonify(history), 201
 
 
-# ---------- Lookup API ----------
-
 @app.route('/api/lookup/<path:handle>', methods=['GET'])
 @login_required
 def lookup_app(handle):
     handle = handle.strip()
+    db = load_local_db()
+    entry = db.get(handle)
 
-    if not EXODUS_API_KEY:
-        return jsonify({
-            "error": "missing_api_key",
-            "message": (
-                "This feature needs a free Exodus Privacy API key before it can run. "
-                "Email api@exodus-privacy.eu.org with your username, email, and a short "
-                "description of this project, then set the key as the EXODUS_API_KEY "
-                "environment variable and restart the server."
-            ),
-        }), 501
-
-    try:
-        resp = requests.get(
-            f"{EXODUS_BASE}/api/search/{handle}/details",
-            headers=_exodus_headers(),
-            timeout=10,
-        )
-    except requests.RequestException as e:
-        return jsonify({"error": "network_error", "message": str(e)}), 502
-
-    if resp.status_code in (401, 403):
-        return jsonify({
-            "error": "unauthorized",
-            "message": "Exodus rejected the API key. Double-check EXODUS_API_KEY is set correctly.",
-        }), 502
-    if resp.status_code == 404:
+    if not entry:
         return jsonify({
             "error": "not_found",
-            "message": f"No εxodus report found for '{handle}'. Use the exact Android "
-                       f"package name, e.g. com.instagram.android or com.whatsapp.",
+            "message": f"'{handle}' isn't in your local database yet. Look it up at "
+                       f"reports.exodus-privacy.eu.org and add it to local_database.json.",
         }), 404
-    if not resp.ok:
-        return jsonify({"error": "upstream_error", "message": f"Exodus API returned {resp.status_code}"}), 502
 
-    reports = resp.json()
-    if not reports:
-        return jsonify({"error": "not_found", "message": f"No report found for '{handle}'."}), 404
-
-    latest = max(reports, key=lambda r: r.get("updated", ""))
-
-    try:
-        tracker_map = get_tracker_map()
-    except requests.RequestException:
-        tracker_map = {}
-
-    tracker_ids = latest.get("trackers", [])
-    trackers = []
-    for tid in tracker_ids:
-        info = tracker_map.get(str(tid))
-        if info:
-            trackers.append({"name": info["name"], "categories": info.get("categories", [])})
-        else:
-            trackers.append({"name": f"Tracker #{tid}", "categories": []})
-
-    permissions = latest.get("permissions", [])
+    permissions = entry.get("permissions", [])
     dangerous = [DANGEROUS_PERMISSIONS[p] for p in permissions if p in DANGEROUS_PERMISSIONS]
 
     return jsonify({
-        "handle": latest.get("handle", handle),
-        "app_name": latest.get("app_name") or handle,
-        "version": latest.get("version_name", ""),
-        "updated": latest.get("updated", ""),
-        "trackers": trackers,
-        "tracker_count": len(trackers),
+        "handle": handle,
+        "app_name": entry.get("app_name", handle),
+        "version": "curated entry",
+        "updated": "manually verified",
+        "trackers": [{"name": t, "categories": []} for t in entry.get("trackers", [])],
+        "tracker_count": len(entry.get("trackers", [])),
         "permissions_total": len(permissions),
         "dangerous_permissions": dangerous,
-        "source_report_url": f"https://reports.exodus-privacy.eu.org/en/reports/search/{handle}/",
+        "source_report_url": entry.get("source_url", ""),
     })
 
 

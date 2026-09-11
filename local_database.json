@@ -1,0 +1,20 @@
+{
+  "com.instagram.android": {
+    "app_name": "Instagram",
+    "trackers": ["Facebook Ads", "Facebook Analytics", "Facebook Login", "Google Firebase Analytics", "Google CrashLytics"],
+    "permissions": ["ACCESS_FINE_LOCATION", "CAMERA", "RECORD_AUDIO", "READ_CONTACTS", "READ_EXTERNAL_STORAGE"],
+    "source_url": "https://reports.exodus-privacy.eu.org/en/reports/com.instagram.android/latest/"
+  },
+  "com.whatsapp": {
+    "app_name": "WhatsApp",
+    "trackers": ["Google Firebase Analytics", "Google CrashLytics"],
+    "permissions": ["CAMERA", "RECORD_AUDIO", "READ_CONTACTS", "ACCESS_COARSE_LOCATION", "GET_ACCOUNTS"],
+    "source_url": "https://reports.exodus-privacy.eu.org/en/reports/com.whatsapp/latest/"
+  },
+  "com.spotify.music": {
+    "app_name": "Spotify",
+    "trackers": ["Google Firebase Analytics", "Google CrashLytics", "Facebook Ads"],
+    "permissions": ["READ_EXTERNAL_STORAGE", "ACCESS_COARSE_LOCATION", "GET_ACCOUNTS"],
+    "source_url": "https://reports.exodus-privacy.eu.org/en/reports/com.spotify.music/latest/"
+  }
+}
