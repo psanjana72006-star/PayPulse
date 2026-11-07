@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title"><div><h1>How to use TO-DO-List</h1><small>A quick tour of every page.</small></div></div>
+
+    <div class="help-grid">
+      <div class="card"><h3>🏠 Dashboard</h3><p>Your day at a glance: what is overdue, what is due today, and your overall progress.</p></div>
+      <div class="card"><h3>📋 Tasks</h3><p>Type or speak a task in plain words, like <i>"Submit report tomorrow at 5pm high priority"</i>. A preview shows how it was understood.</p></div>
+      <div class="card"><h3>🗂 Board</h3><p>Drag cards between To Do, In Progress and Done. Click a card to edit it.</p></div>
+      <div class="card"><h3>📆 Calendar</h3><p>See deadlines by month. Click a day to view or add tasks for that day.</p></div>
+      <div class="card"><h3>⏰ Reminders</h3><p>Overdue, due today and coming up. Give a task a due time to get an alert before it. Snooze with +1 day.</p></div>
+      <div class="card"><h3>⏱ Focus</h3><p>A Pomodoro timer. Pick a task, focus for 25 minutes, and the time is saved to that task.</p></div>
+      <div class="card"><h3>📈 Progress</h3><p>Charts of what you finished, how much you focused, and a history of everything you did.</p></div>
+      <div class="card"><h3>🏆 Achievements</h3><p>Earn XP, level up and unlock badges for streaks, focus time and finished tasks.</p></div>
+      <div class="card"><h3>🤖 AI Assistant</h3><p>Just chat. Say <i>"I need to buy milk tomorrow"</i>, <i>"I finished the report"</i> or <i>"I feel overwhelmed"</i>. Every change has an Undo button.</p></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Quick tips</h3>
+      <ul>
+        <li>Press <kbd>N</kbd> on any page, or click the round <b>＋</b> button, to add a task.</li>
+        <li>Deleted something by mistake? Click <b>Undo</b> in the message that appears.</li>
+        <li>Tasks can have a checklist of subtasks. Progress updates as you tick them.</li>
+        <li>Turn on 🔔 notifications to get reminders even when the tab is in the background.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>Questions</h3>
+      <details><summary>The microphone does not work</summary>
+        <p>Use Google Chrome or Microsoft Edge and open the site as <b>http://localhost:3000</b>. Click the 🔒 icon in the address bar and set Microphone to Allow. Voice input also needs an internet connection.</p></details>
+      <details><summary>Why does the AI say it is in offline mode?</summary>
+        <p>Offline mode understands everyday sentences about your tasks. For open conversations on any topic, your teacher or you can add an Anthropic API key to the server (see the README).</p></details>
+      <details><summary>Where is my data saved?</summary>
+        <p>On the server, in the <code>todo.db</code> file. It is still there after you refresh, log out or restart.</p></details>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>initPage('help');</script>
+</body>
+</html>

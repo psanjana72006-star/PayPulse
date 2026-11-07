@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Focus · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title"><h1>Focus timer</h1><small id="todayTotal"></small></div>
+    <div class="cols">
+      <div class="card">
+        <div class="modes" id="modes"></div>
+        <div id="clock">25:00</div>
+        <label>Task to work on (focus time is saved to it)
+          <select id="taskSel"></select>
+        </label>
+        <label>Focus length in minutes
+          <input id="custom" type="number" min="1" max="180" value="25">
+        </label>
+        <div class="row end" style="justify-content:center">
+          <button id="start">Start</button>
+          <button class="ghost" id="reset">Reset</button>
+        </div>
+        <p><small>Keep this tab open while the timer runs. Only completed focus sessions are saved.</small></p>
+      </div>
+      <div class="card">
+        <h3>Recent sessions</h3>
+        <ul class="timeline" id="sessions"></ul>
+      </div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const MODES = { focus: ['Focus', 25], short: ['Short break', 5], long: ['Long break', 15] };
+    let mode = 'focus', total = 25 * 60, remaining = total, endAt = 0, timer = null;
+
+    const fmt = (s) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+    function draw() { $('#clock').textContent = fmt(remaining); document.title = (timer ? fmt(remaining) + ' · ' : '') + 'Focus · TO-DO-List'; }
+
+    function setMode(m) {
+      stop();
+      mode = m;
+      const mins = m === 'focus' ? Math.max(1, Math.min(180, parseInt($('#custom').value) || 25)) : MODES[m][1];
+      total = remaining = mins * 60;
+      $$('#modes button').forEach((b) => b.classList.toggle('active', b.dataset.m === m));
+      draw();
+    }
+    function stop() { clearInterval(timer); timer = null; $('#start').textContent = 'Start'; }
+
+    function tick() {
+      remaining = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      draw();
+      if (remaining > 0) return;
+      stop();
+      finish();
+    }
+    async function finish() {
+      if (mode === 'focus') {
+        const minutes = Math.round(total / 60);
+        try { await api('/focus', 'POST', { task_id: $('#taskSel').value || null, minutes }); } catch (e) { toast(e.message, 'error'); }
+        notify('Focus session complete', `${minutes} minutes saved. Take a short break.`);
+        loadSessions();
+        setMode('short');
+      } else {
+        notify('Break over', 'Ready for the next focus session?');
+        setMode('focus');
+      }
+    }
+
+    $('#start').onclick = () => {
+      if (timer) { stop(); return; }              // pause
+      endAt = Date.now() + remaining * 1000;
+      timer = setInterval(tick, 250);
+      $('#start').textContent = 'Pause';
+    };
+    $('#reset').onclick = () => setMode(mode);
+    $('#custom').addEventListener('change', () => mode === 'focus' && setMode('focus'));
+
+    async function loadTasks() {
+      const tasks = (await api('/tasks')).filter((t) => t.status !== 'done');
+      $('#taskSel').replaceChildren(h('option', { value: '' }, 'No specific task'), ...tasks.map((t) => h('option', { value: t.id }, t.title)));
+      const wanted = new URLSearchParams(location.search).get('task');
+      if (wanted) $('#taskSel').value = wanted;
+    }
+    async function loadSessions() {
+      const d = await api('/focus');
+      $('#todayTotal').textContent = `Today: ${d.todayMinutes} focused minutes`;
+      $('#sessions').replaceChildren(...(d.sessions.length
+        ? d.sessions.map((s) => h('li', {}, `${s.minutes} min` + (s.title ? ' on ' + s.title : ''), h('small', {}, s.created_at)))
+        : [h('li', { class: 'empty' }, 'No sessions yet. Start the timer!')]));
+    }
+
+    function load() { loadTasks(); loadSessions(); }
+
+    if (initPage('focus')) {
+      $('#modes').replaceChildren(...Object.entries(MODES).map(([m, [label, mins]]) =>
+        h('button', { class: 'ghost', 'data-m': m, onclick: () => setMode(m) }, `${label} · ${mins}m`)));
+      setMode('focus');
+      loadTasks();
+      loadSessions();
+    }
+  </script>
+</body>
+</html>

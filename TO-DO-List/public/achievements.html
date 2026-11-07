@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Achievements · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title"><div><h1>Achievements</h1><small>Earn XP by finishing tasks, keeping streaks and focusing. Unlock badges as you go.</small></div></div>
+
+    <div class="card level">
+      <div class="big" id="level">1</div>
+      <div class="grow">
+        <h3 id="levelTitle">Level 1</h3>
+        <div id="xpBar"></div>
+        <small id="xpText"></small>
+      </div>
+    </div>
+
+    <h3>Badges <small id="count"></small></h3>
+    <div class="badges" id="badges"></div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>How XP works</h3>
+      <small>+10 XP for every completed task · +1 XP for every focused minute · +5 XP per streak day · +25 XP for every badge.
+      Every 100 XP is a new level.</small>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const TITLES = ['Beginner', 'Starter', 'Achiever', 'Planner', 'Pro', 'Expert', 'Master', 'Legend'];
+    async function load() {
+      const a = await api('/achievements');
+      $('#level').textContent = a.level;
+      $('#levelTitle').textContent = `Level ${a.level} · ${TITLES[Math.min(a.level - 1, TITLES.length - 1)]}`;
+      $('#xpBar').replaceChildren(progressBar(a.xpIntoLevel));
+      $('#xpText').textContent = `${a.xpIntoLevel}/100 XP to level ${a.level + 1} · ${a.xp} XP total`;
+      const earned = a.badges.filter((b) => b.earned).length;
+      $('#count').textContent = `(${earned} of ${a.badges.length} unlocked)`;
+      $('#badges').replaceChildren(...a.badges.map((b) => h('div', { class: 'badge-card ' + (b.earned ? 'earned' : 'locked') },
+        h('div', { class: 'big' }, b.icon), h('b', {}, b.name), h('div', {}, h('small', {}, b.desc)),
+        h('div', { style: 'margin-top:8px' }, b.earned ? h('small', {}, '✅ Unlocked') : [progressBar(Math.round((b.cur / b.target) * 100)), h('small', {}, `${b.cur}/${b.target}`)]))));
+    }
+    if (initPage('achievements')) load();
+  </script>
+</body>
+</html>

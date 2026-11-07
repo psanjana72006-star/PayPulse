@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Assistant · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <div><h1>AI Assistant</h1><small>Talk to it like a person. It manages your tasks, plans your day, tracks progress and answers questions about the app.</small></div>
+      <span class="status-chip" id="status">Checking…</span>
+    </div>
+
+    <div class="cols wide-left">
+      <div class="card">
+        <div class="chat" id="chat" aria-live="polite"></div>
+        <div class="chips" id="chips"></div>
+        <div class="row">
+          <input id="msg" placeholder='Ask anything: "buy milk tomorrow at 5pm", "plan my day", "how does XP work?"' maxlength="1000" autocomplete="off">
+          <button class="ghost mic" id="mic" title="Speak">🎤</button>
+          <button id="send">Send</button>
+        </div>
+        <p><small id="modeNote"></small> <button class="ghost small" id="clear">Clear chat</button></p>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>Your next tasks</h3>
+          <div id="side"></div>
+        </div>
+        <div class="card">
+          <h3>Break a big goal into steps</h3>
+          <label>Goal<input id="goal" placeholder="e.g. Finish SEPM project report"></label>
+          <label>Deadline (optional)<input id="deadline" type="date"></label>
+          <div class="row end"><button id="plan">Create steps</button></div>
+          <div id="planResult"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const chat = () => $('#chat');
+
+    // Safe formatting: turns **bold** into <b>; everything else stays plain, escaped text
+    function richText(text) {
+      const out = [];
+      String(text).split(/(\*\*[^*\n]+\*\*)/g).forEach((part) => {
+        if (/^\*\*[^*\n]+\*\*$/.test(part)) out.push(h('b', {}, part.slice(2, -2)));
+        else if (part) out.push(part);
+      });
+      return out;
+    }
+
+    function bubble(role, text, actions = []) {
+      const el = h('div', { class: 'msg ' + role }, h('span', {}, ...richText(text)));
+      if (actions.length) {
+        const row = h('div', { class: 'acts' });
+        actions.forEach((a) => {
+          const isUndo = /^Undo/.test(a.label);
+          const b = h('button', { class: isUndo ? 'undo' : '', onclick: async () => {
+            if (isUndo) b.disabled = true;
+            await runAction(a);
+          } }, a.label);
+          row.append(b);
+        });
+        el.append(row);
+      }
+      chat().append(el);
+      chat().scrollTop = chat().scrollHeight;
+      return el;
+    }
+
+    async function runAction(a) {
+      try {
+        if (a.send) return send(a.send);
+        if (a.href) { location.href = a.href; return; }
+        if (a.post) { for (const p of [].concat(a.post)) await api('/tasks', 'POST', p); toast('Restored', 'success'); }
+        else if (a.put) { await api('/tasks/' + a.put.id, 'PUT', a.put.body); toast('Undone', 'success'); }
+        else if (a.del) { for (const id of [].concat(a.del)) await api('/tasks/' + id, 'DELETE'); toast('Undone', 'success'); }
+        load();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    let busy = false;
+    async function send(text) {
+      text = (text || $('#msg').value).trim();
+      if (!text || busy) return;
+      busy = true;
+      $('#msg').value = '';
+      bubble('user', text);
+      const wait = h('div', { class: 'msg assistant typing' }, h('span'), h('span'), h('span'));
+      chat().append(wait); chat().scrollTop = chat().scrollHeight;
+      try {
+        const r = await api('/ai/chat', 'POST', { message: text });
+        wait.remove();
+        bubble('assistant', r.reply, r.actions || []);
+        load().catch(() => {});
+      } catch (e) {
+        wait.remove();
+        // "Failed to fetch" means the browser could not reach the server at all
+        const unreachable = e instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(e.message);
+        bubble('assistant', unreachable
+          ? "I can't reach the server right now. Make sure it is running (open a terminal in the project folder and run: node server.js), then send your message again."
+          : 'Sorry, something went wrong: ' + e.message);
+      }
+      busy = false;
+      $('#msg').focus();
+    }
+
+    async function load() {            // refreshes the "next tasks" panel
+      const tasks = (await api('/tasks')).filter((t) => t.status !== 'done').slice(0, 6);
+      $('#side').replaceChildren(...(tasks.length ? tasks.map((t) => taskRow(t, load)) : [h('p', { class: 'empty' }, 'No open tasks. Tell the assistant what you need to do!')]));
+    }
+
+    async function init() {
+      let st = { connected: false }, hist = [];
+      try {
+        st = await api('/ai/status');
+        hist = await api('/ai/history');
+      } catch (e) {
+        $('#status').textContent = '● Server not reachable';
+        toast("Can't reach the server. Run node server.js in the project folder and reload this page.", 'error', 9000);
+      }
+      if ($('#status').textContent === 'Checking…') {
+        $('#status').textContent = st.connected ? '● Claude AI connected' : '○ Offline mode';
+        $('#status').classList.toggle('on', st.connected);
+      }
+      $('#modeNote').textContent = st.connected ? 'Powered by Claude. Ask me anything about your tasks, planning or this app.'
+        : 'Offline mode: I understand everyday sentences about your tasks and the app. Ask me "how do I enable Claude?" for open-ended chat.';
+
+      hist.forEach((m) => bubble(m.role, m.content));
+      if (!hist.length) bubble('assistant',
+        'Hi! 👋 Ask me anything about your to-do list. I can add, finish, edit, move and delete tasks, plan your day, check your progress, give study tips and explain how every page works. Just type naturally, or tap an example:',
+        [{ label: 'buy milk tomorrow at 5pm', send: 'buy milk tomorrow at 5pm' },
+         { label: 'Plan my day', send: 'Plan my day' }, { label: 'What can you do?', send: 'help' }]);
+
+      $('#chips').replaceChildren(...['Plan my day', "What's due today?", 'How am I doing?', 'Give me a tip', 'What can you do?']
+        .map((q) => h('button', { onclick: () => send(q === 'What can you do?' ? 'help' : q) }, q)));
+      load().catch(() => {});
+    }
+
+    if (initPage('ai')) {
+      init();
+      $('#send').onclick = () => send();
+      $('#msg').addEventListener('keydown', (e) => e.key === 'Enter' && send());
+      $('#mic').onclick = () => startVoice($('#msg'), $('#mic'), (text) => send(text));
+      $('#clear').onclick = async () => {
+        await api('/ai/history', 'DELETE'); chat().replaceChildren();
+        bubble('assistant', 'Chat cleared. What would you like to do?', [{ label: 'Plan my day', send: 'Plan my day' }]);
+      };
+      $('#plan').onclick = async () => {
+        const goal = $('#goal').value.trim();
+        if (!goal) return toast('Type a goal first', 'error');
+        $('#plan').disabled = true; $('#plan').textContent = 'Planning…';
+        try {
+          const r = await api('/ai/breakdown', 'POST', { goal, deadline: $('#deadline').value });
+          $('#planResult').replaceChildren(
+            h('p', {}, `✅ ${r.created.length} steps added` + (r.mode === 'offline' ? ' (offline template)' : ' by Claude')),
+            ...r.created.map((t) => h('div', { class: 'meta' }, `• ${t.title} - due ${t.due_date}`)));
+          toast('Steps added to your tasks', 'success');
+          load();
+        } catch (e) { toast(e.message, 'error'); }
+        $('#plan').disabled = false; $('#plan').textContent = 'Create steps';
+      };
+    }
+  </script>
+</body>
+</html>

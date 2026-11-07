@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Board · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <div><h1>Board</h1><small>Drag a card to another column to change its status. Click a card to edit it.</small></div>
+      <button onclick="openTaskModal(null, load)">＋ New task</button>
+    </div>
+    <div class="board" id="board"></div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const COLUMNS = [['todo', '📝 To Do'], ['doing', '⚙️ In Progress'], ['done', '🎉 Done']];
+
+    async function load() {
+      const tasks = await api('/tasks');
+      $('#board').replaceChildren(...COLUMNS.map(([status, title]) => {
+        const items = tasks.filter((t) => t.status === status);
+        const col = h('div', { class: 'col' },
+          h('h3', {}, title, h('small', {}, String(items.length))),
+          ...(items.length ? items.map(card) : [h('p', { class: 'empty' }, 'Drop tasks here')]));
+        col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
+        col.addEventListener('dragleave', () => col.classList.remove('over'));
+        col.addEventListener('drop', async (e) => {
+          e.preventDefault(); col.classList.remove('over');
+          const id = e.dataTransfer.getData('text/plain');
+          if (!id) return;
+          await api('/tasks/' + id, 'PUT', { status });
+          toast('Moved to ' + title.slice(2), 'success');
+          load();
+        });
+        return col;
+      }));
+    }
+
+    function card(t) {
+      const el = h('div', { class: 'kcard ' + t.priority, draggable: 'true', onclick: () => openTaskModal(t, load) },
+        h('div', { class: 'title' }, t.title),
+        h('div', { class: 'meta' },
+          h('span', {}, '#' + t.category),
+          h('span', { class: isOverdue(t) ? 'late' : '' }, (isOverdue(t) ? '⚠ ' : '📅 ') + dueLabel(t)),
+          t.recurring !== 'none' ? h('span', {}, '🔁') : null),
+        t.status !== 'todo' ? progressBar(t.progress) : null);
+      el.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', String(t.id)));
+      return el;
+    }
+
+    if (initPage('board')) load();
+  </script>
+</body>
+</html>

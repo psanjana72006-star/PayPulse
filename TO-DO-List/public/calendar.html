@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calendar · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <div><h1>Calendar</h1><small>See every deadline at a glance. Click a day to see or add its tasks.</small></div>
+      <div class="row">
+        <button class="ghost" id="prev">◀</button>
+        <b id="monthName" style="min-width:150px;text-align:center"></b>
+        <button class="ghost" id="next">▶</button>
+        <button class="ghost" id="todayBtn">Today</button>
+      </div>
+    </div>
+
+    <div class="cols wide-left">
+      <div class="card"><div class="cal" id="cal"></div></div>
+      <div class="card">
+        <h3 id="dayTitle">Pick a day</h3>
+        <div id="dayList"></div>
+        <div class="row end"><button id="addDay">＋ Add task on this day</button></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    let view = new Date(); view.setDate(1);
+    let selected = today();
+    let tasks = [];
+
+    async function load() {
+      tasks = await api('/tasks');
+      draw();
+    }
+
+    function draw() {
+      $('#monthName').textContent = view.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      const first = new Date(view.getFullYear(), view.getMonth(), 1);
+      const start = new Date(first); start.setDate(1 - first.getDay());          // Sunday before the 1st
+      const cells = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => h('div', { class: 'dow' }, d));
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(start); d.setDate(start.getDate() + i);
+        const iso = localDate(d);
+        const list = tasks.filter((t) => t.due_date === iso);
+        cells.push(h('div', {
+          class: 'day' + (d.getMonth() !== view.getMonth() ? ' other' : '') + (iso === today() ? ' today' : '') + (iso === selected ? ' sel' : ''),
+          onclick: () => { selected = iso; draw(); },
+        }, h('div', { class: 'n' }, String(d.getDate())),
+          ...list.slice(0, 3).map((t) => h('div', { class: 'chip ' + (t.status === 'done' ? 'done' : t.priority), title: t.title }, t.title)),
+          list.length > 3 ? h('small', {}, `+${list.length - 3} more`) : null));
+      }
+      $('#cal').replaceChildren(...cells);
+
+      const list = tasks.filter((t) => t.due_date === selected);
+      $('#dayTitle').textContent = new Date(selected + 'T00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+      $('#dayList').replaceChildren(...(list.length ? list.map((t) => taskRow(t, load)) : [h('p', { class: 'empty' }, 'No tasks on this day.')]));
+    }
+
+    if (initPage('calendar')) {
+      $('#prev').onclick = () => { view.setMonth(view.getMonth() - 1); draw(); };
+      $('#next').onclick = () => { view.setMonth(view.getMonth() + 1); draw(); };
+      $('#todayBtn').onclick = () => { view = new Date(); view.setDate(1); selected = today(); draw(); };
+      $('#addDay').onclick = () => openTaskModal({ due_date: selected }, load);
+      load();
+    }
+  </script>
+</body>
+</html>

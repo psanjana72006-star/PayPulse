@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reminders · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <div><h1>Deadline reminders</h1><small>Alerts appear on every page while the site is open. Add a due time to a task to get an alert 30 minutes before.</small></div>
+      <div class="row">
+        <button id="enable">🔔 Turn on desktop notifications</button>
+        <button class="ghost" id="test">Send a test reminder</button>
+      </div>
+    </div>
+
+    <div class="card"><h3 class="section-title">Overdue <span class="pill" id="cOver">0</span></h3><div id="over"></div></div>
+    <div class="card"><h3 class="section-title">Due today <span class="pill warn" id="cToday">0</span></h3><div id="today"></div></div>
+    <div class="card"><h3 class="section-title">Next 7 days <span class="pill info" id="cNext">0</span></h3><div id="next"></div></div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    async function load() {
+      const r = await api('/reminders');
+      const fill = (sel, countSel, list, emptyText) => {
+        $(countSel).textContent = list.length;
+        $(sel).replaceChildren(...(list.length ? list.map((t) => taskRow(t, load, snoozeButtons(t))) : [h('p', { class: 'empty' }, emptyText)]));
+      };
+      fill('#over', '#cOver', r.overdue, 'Nothing overdue. 🎉');
+      fill('#today', '#cToday', r.today, 'Nothing due today.');
+      fill('#next', '#cNext', r.upcoming, 'No deadlines in the next 7 days.');
+    }
+
+    function snoozeButtons(t) {
+      const move = (days) => async () => {
+        await api('/tasks/' + t.id, 'PUT', { due_date: addDays(today() > t.due_date ? today() : t.due_date, days) });
+        toast('Deadline moved', 'success'); load();
+      };
+      return [h('button', { class: 'ghost small', title: 'Move deadline by 1 day', onclick: move(1) }, '+1 day'),
+              h('button', { class: 'ghost small', title: 'Move deadline by 1 week', onclick: move(7) }, '+1 week')];
+    }
+
+    if (initPage('reminders')) {
+      $('#enable').onclick = async () => {
+        if (!('Notification' in window)) return toast('This browser does not support desktop notifications. In-app reminders still work.', 'error');
+        const p = await Notification.requestPermission();
+        toast(p === 'granted' ? '🔔 Desktop notifications are on' : 'Notifications are blocked. Click the 🔒 icon in the address bar to allow them.', p === 'granted' ? 'success' : 'error', 6000);
+      };
+      $('#test').onclick = () => notify('Test reminder', 'This is how your deadline alerts will look.');
+      load();
+    }
+  </script>
+</body>
+</html>

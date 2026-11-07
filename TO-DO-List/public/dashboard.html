@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <div><h1 id="hello">Hello 👋</h1><small id="date"></small></div>
+      <div class="row">
+        <button onclick="openTaskModal(null, load)">＋ New task</button>
+        <button class="ghost" id="exportBtn">⬇ Export CSV</button>
+      </div>
+    </div>
+
+    <div class="card welcome" id="welcome" style="display:none">
+      <h2>Welcome! 🎉 Let's get you started</h2>
+      <p>Your list is empty. Pick one:</p>
+      <button onclick="openTaskModal(null, load)">＋ Add my first task</button>
+      <a class="btn" href="ai.html">🤖 Ask the AI assistant</a>
+      <button id="welcomeDemo">Load sample data</button>
+      <a class="btn" href="help.html">❓ Take the tour</a>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="cols">
+      <div>
+        <div class="card"><h3>Needs your attention</h3><div id="attention"></div></div>
+        <div class="card"><h3>Coming up in the next 7 days</h3><div id="upcoming"></div></div>
+      </div>
+      <div>
+        <div class="card"><h3>Overall progress</h3><div class="ring" id="ring"><div id="ringText">0%</div></div>
+          <p class="empty" id="ringNote"></p></div>
+        <div class="card"><h3>Tasks completed, last 7 days</h3><div id="week"></div></div>
+        <div class="card">
+          <h3>Testing tools</h3>
+          <p><small>Load sample tasks to try every page, or clear everything and start fresh.</small></p>
+          <div class="row">
+            <button class="ghost" id="demoBtn">Load demo data</button>
+            <button class="ghost" id="resetBtn">Delete all my tasks</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    async function load() {
+      const [s, r] = await Promise.all([api('/stats'), api('/reminders')]);
+
+      $('#stats').replaceChildren(
+        ...[
+          ['Completed', s.completed, 'good'], ['Pending', s.pending, ''], ['Overdue', s.overdue, s.overdue ? 'bad' : ''],
+          ['Due today', s.dueToday, s.dueToday ? 'warn' : ''], ['Day streak', '🔥 ' + s.streak, ''], ['Focus minutes', s.focus, ''],
+        ].map(([label, val, cls]) => h('div', { class: 'stat ' + cls }, h('b', {}, String(val)), label)));
+
+      $('#welcome').style.display = s.total ? 'none' : 'block';
+      const attention = [...r.overdue, ...r.today];
+      $('#attention').replaceChildren(...(attention.length
+        ? attention.map((t) => taskRow(t, load))
+        : [h('p', { class: 'empty' }, 'Nothing is due today. Add a task or enjoy the free time.')]));
+      $('#upcoming').replaceChildren(...(r.upcoming.length
+        ? r.upcoming.map((t) => taskRow(t, load))
+        : [h('p', { class: 'empty' }, 'No deadlines in the next 7 days.')]));
+
+      $('#ring').style.background = `conic-gradient(var(--primary) ${s.overallProgress * 3.6}deg, var(--border) 0)`;
+      $('#ringText').textContent = s.overallProgress + '%';
+      $('#ringNote').textContent = s.total ? `${s.completed} of ${s.total} tasks done` : 'No tasks yet';
+      $('#week').replaceChildren(barChart(s.last14.slice(7).map((d) => ({ label: shortDay(d.date), value: d.completed }))));
+    }
+
+    $('#exportBtn').onclick = async () => {
+      const r = await fetch('/api/export', { headers: { Authorization: 'Bearer ' + localStorage.getItem('token') } });
+      const a = h('a', { href: URL.createObjectURL(await r.blob()), download: 'tasks.csv' });
+      a.click();
+    };
+    $('#welcomeDemo').onclick = async () => { await api('/demo', 'POST'); toast('Sample data loaded', 'success'); load(); };
+    $('#demoBtn').onclick = async () => { await api('/demo', 'POST'); toast('Demo data loaded', 'success'); load(); };
+    $('#resetBtn').onclick = async () => {
+      if (!confirm('Delete ALL your tasks, focus sessions and AI chat? This cannot be undone.')) return;
+      await api('/reset', 'POST'); toast('All tasks deleted', 'success'); load();
+    };
+
+    if (initPage('dashboard')) {
+      const hr = new Date().getHours();
+      $('#hello').textContent = `Good ${hr < 12 ? 'morning' : hr < 18 ? 'afternoon' : 'evening'}, ${localStorage.getItem('userName') || ''} 👋`;
+      $('#date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      load();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Progress · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title"><h1>Progress</h1><small>Everything you do is saved, so these numbers update as you test.</small></div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="cols">
+      <div class="card"><h3>Tasks completed per day (14 days)</h3><div id="doneChart"></div></div>
+      <div class="card"><h3>Focus minutes per day (14 days)</h3><div id="focusChart"></div></div>
+    </div>
+
+    <div class="cols">
+      <div class="card"><h3>By category</h3><div id="cats"></div></div>
+      <div class="card"><h3>By priority</h3><div id="prios"></div></div>
+    </div>
+
+    <div class="cols">
+      <div class="card"><h3>Tasks in progress</h3><div id="active"></div></div>
+      <div class="card"><h3>Activity history</h3><ul class="timeline" id="activity"></ul></div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    const ICON = { created: '➕', completed: '✅', moved: '↔️', updated: '✏️', deleted: '🗑', focus: '⏱', ai: '🤖',
+      recurring: '🔁', account: '👤', demo: '🧪', reset: '♻️' };
+
+    async function load() {
+      const [s, tasks, act] = await Promise.all([api('/stats'), api('/tasks'), api('/activity?limit=60')]);
+
+      $('#stats').replaceChildren(...[
+        ['Completion rate', s.completionRate + '%'], ['Overall progress', s.overallProgress + '%'],
+        ['Finished on time', s.onTimeRate === null ? '–' : s.onTimeRate + '%'],
+        ['Day streak', '🔥 ' + s.streak], ['Overdue now', s.overdue], ['Total focus (min)', s.focus],
+      ].map(([label, val]) => h('div', { class: 'stat' }, h('b', {}, String(val)), label)));
+
+      $('#doneChart').replaceChildren(barChart(s.last14.map((d) => ({ label: shortDay(d.date), value: d.completed })), { color: 'var(--good)' }));
+      $('#focusChart').replaceChildren(barChart(s.last14.map((d) => ({ label: shortDay(d.date), value: d.focus }))));
+
+      const groups = (list, el) => $(el).replaceChildren(...(list.length
+        ? list.map((g) => hbar(g.name, g.done || 0, g.total)) : [h('p', { class: 'empty' }, 'No data yet')]));
+      groups(s.byCategory, '#cats');
+      groups(s.byPriority, '#prios');
+
+      const active = tasks.filter((t) => t.status === 'doing' || (t.status !== 'done' && t.progress > 0));
+      $('#active').replaceChildren(...(active.length
+        ? active.map((t) => taskRow(t, load))
+        : [h('p', { class: 'empty' }, 'No task is in progress. Move a task to "In Progress" on the Board page.')]));
+
+      $('#activity').replaceChildren(...(act.length
+        ? act.map((a) => h('li', {}, `${ICON[a.action] || '•'} ${a.action}: ${a.detail || ''}`, h('small', {}, a.created_at)))
+        : [h('li', { class: 'empty' }, 'No activity yet')]));
+    }
+    if (initPage('progress')) load();
+  </script>
+</body>
+</html>

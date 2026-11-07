@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tasks · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title">
+      <h1>Tasks</h1>
+      <button onclick="openTaskModal(null, load)">＋ Detailed task</button>
+    </div>
+
+    <div class="card">
+      <h3>Quick add</h3>
+      <div class="row">
+        <input id="quick" placeholder="Type or speak: Submit report tomorrow at 5pm high priority #college">
+        <button class="ghost mic" id="mic" title="Speak a task">🎤</button>
+        <button id="add">Add task</button>
+      </div>
+      <div class="preview" id="preview"></div>
+      <small>Understood words: today, tomorrow, next week, in 3 days, Monday… · at 5pm · high / low priority (or !high) · #category · daily / weekly / monthly</small>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="search" placeholder="🔍 Search tasks">
+        <select id="fPriority"><option value="">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        <select id="fStatus"><option value="">All statuses</option><option value="todo">To Do</option><option value="doing">In Progress</option><option value="done">Done</option></select>
+        <select id="fCategory"><option value="">All categories</option></select>
+        <select id="sort"><option value="due">Sort: deadline</option><option value="priority">Sort: priority</option><option value="new">Sort: newest</option></select>
+      </div>
+    </div>
+
+    <div class="card"><div id="list"></div></div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    let all = [];
+
+    async function load() {
+      all = await api('/tasks');
+      const cats = [...new Set(all.map((t) => t.category))].sort();
+      const cur = $('#fCategory').value;
+      $('#fCategory').replaceChildren(h('option', { value: '' }, 'All categories'), ...cats.map((c) => h('option', { value: c }, c)));
+      $('#fCategory').value = cats.includes(cur) ? cur : '';
+      render();
+    }
+
+    function render() {
+      const q = $('#search').value.toLowerCase();
+      const rank = { high: 0, medium: 1, low: 2 };
+      let rows = all.filter((t) =>
+        (!q || (t.title + ' ' + (t.notes || '')).toLowerCase().includes(q)) &&
+        (!$('#fPriority').value || t.priority === $('#fPriority').value) &&
+        (!$('#fStatus').value || t.status === $('#fStatus').value) &&
+        (!$('#fCategory').value || t.category === $('#fCategory').value));
+      const sort = $('#sort').value;
+      rows.sort((a, b) =>
+        (a.status === 'done') - (b.status === 'done') ||
+        (sort === 'priority' ? rank[a.priority] - rank[b.priority]
+          : sort === 'new' ? b.id - a.id
+          : (a.due_date || '9999').localeCompare(b.due_date || '9999') || (a.due_time || '').localeCompare(b.due_time || '')));
+      $('#list').replaceChildren(...(rows.length
+        ? rows.map((t) => taskRow(t, load))
+        : [h('p', { class: 'empty' }, all.length ? 'No tasks match these filters.' : 'No tasks yet. Add your first task above.')]));
+    }
+
+    async function add() {
+      const t = parseQuick($('#quick').value);
+      if (!t.title) return toast('Type a task first, for example "Buy milk tomorrow"', 'error');
+      try {
+        await api('/tasks', 'POST', t);
+        $('#quick').value = ''; $('#preview').textContent = '';
+        toast('Added: ' + t.title, 'success');
+        load();
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    if (initPage('tasks')) {
+      $('#add').onclick = add;
+      $('#quick').addEventListener('keydown', (e) => e.key === 'Enter' && add());
+      $('#quick').addEventListener('input', () => { $('#preview').textContent = describeParsed(parseQuick($('#quick').value)); });
+      $('#mic').onclick = () => startVoice($('#quick'), $('#mic'), () => toast('Check the preview, then press Add task', 'info'));
+      ['search', 'fPriority', 'fStatus', 'fCategory', 'sort'].forEach((id) => $('#' + id).addEventListener('input', render));
+      load();
+    }
+  </script>
+</body>
+</html>

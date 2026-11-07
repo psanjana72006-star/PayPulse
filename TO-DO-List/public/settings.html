@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · TO-DO-List</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <div class="page-title"><h1>Settings</h1></div>
+    <div class="cols">
+      <div>
+        <div class="card">
+          <h3>Profile</h3>
+          <label>Email<input id="email" disabled></label>
+          <label>Name<input id="name" maxlength="60"></label>
+          <div class="row end"><button id="saveName">Save name</button></div>
+        </div>
+        <div class="card">
+          <h3>Change password</h3>
+          <label>Current password<input id="cur" type="password" autocomplete="current-password"></label>
+          <label>New password (at least 6 characters)<input id="new" type="password" autocomplete="new-password"></label>
+          <div class="row end"><button id="savePw">Change password</button></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Preferences</h3>
+          <label>Reminder time before a task's due time
+            <select id="lead"><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="120">2 hours</option></select>
+          </label>
+          <label>Voice input language
+            <select id="lang">
+              <option value="en-US">English (US)</option><option value="en-IN">English (India)</option><option value="en-GB">English (UK)</option>
+              <option value="hi-IN">Hindi</option><option value="kn-IN">Kannada</option><option value="ta-IN">Tamil</option>
+              <option value="te-IN">Telugu</option><option value="ml-IN">Malayalam</option><option value="mr-IN">Marathi</option><option value="bn-IN">Bengali</option>
+            </select>
+          </label>
+          <small>Words like "tomorrow" and "high priority" are understood in English only. In other languages the spoken text is added as the title.</small>
+          <div class="row" style="margin-top:12px">
+            <button class="ghost" id="notif">🔔 Turn on desktop notifications</button>
+            <button class="ghost" id="dark">🌙 Switch dark / light</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Your data</h3>
+          <p><small>Everything is saved in the database on the server.</small></p>
+          <div class="row">
+            <button class="ghost" id="export">⬇ Export tasks (CSV)</button>
+            <button class="ghost" id="demo">Load demo data</button>
+            <button class="ghost" id="reset" style="color:var(--bad)">Delete all my tasks</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="common.js"></script>
+  <script>
+    async function load() {
+      const me = await api('/me');
+      $('#email').value = me.email; $('#name').value = me.name;
+    }
+    if (initPage('settings')) {
+      load();
+      $('#lead').value = localStorage.getItem('leadMins') || '30';
+      $('#lang').value = localStorage.getItem('voiceLang') || 'en-US';
+      $('#lead').onchange = () => { localStorage.setItem('leadMins', $('#lead').value); toast('Reminder time saved', 'success'); };
+      $('#lang').onchange = () => { localStorage.setItem('voiceLang', $('#lang').value); toast('Voice language saved', 'success'); };
+      $('#saveName').onclick = async () => {
+        try { const r = await api('/me', 'PUT', { name: $('#name').value }); localStorage.setItem('userName', r.name); toast('Name updated', 'success'); location.reload(); }
+        catch (e) { toast(e.message, 'error'); }
+      };
+      $('#savePw').onclick = async () => {
+        try { await api('/me/password', 'POST', { current: $('#cur').value, next: $('#new').value }); $('#cur').value = $('#new').value = ''; toast('Password changed', 'success'); }
+        catch (e) { toast(e.message, 'error'); }
+      };
+      $('#notif').onclick = async () => {
+        if (!('Notification' in window)) return toast('This browser has no notification support.', 'error');
+        const p = await Notification.requestPermission();
+        toast(p === 'granted' ? '🔔 Desktop notifications are on' : 'Notifications are blocked. Use the 🔒 icon in the address bar to allow them.', p === 'granted' ? 'success' : 'error', 6000);
+      };
+      $('#dark').onclick = () => { document.body.classList.toggle('dark'); localStorage.setItem('dark', document.body.classList.contains('dark') ? '1' : '0'); };
+      $('#export').onclick = async () => {
+        const r = await fetch('/api/export', { headers: { Authorization: 'Bearer ' + localStorage.getItem('token') } });
+        h('a', { href: URL.createObjectURL(await r.blob()), download: 'tasks.csv' }).click();
+      };
+      $('#demo').onclick = async () => { await api('/demo', 'POST'); toast('Demo data loaded', 'success'); };
+      $('#reset').onclick = async () => {
+        if (!confirm('Delete ALL your tasks, focus sessions and AI chat? This cannot be undone.')) return;
+        await api('/reset', 'POST'); toast('All tasks deleted', 'success');
+      };
+    }
+  </script>
+</body>
+</html>

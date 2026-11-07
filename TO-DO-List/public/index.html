@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TO-DO-List · Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="card auth-card">
+      <h1>✅ TO-DO-List</h1>
+      <p id="subtitle">Log in to see your tasks</p>
+      <input id="name" placeholder="Your name" style="display:none" autocomplete="name">
+      <input id="email" type="email" placeholder="Email" autocomplete="email">
+      <input id="password" type="password" placeholder="Password (at least 6 characters)" autocomplete="current-password">
+      <button id="go">Log in</button>
+      <p class="link" id="toggle">New here? Create an account</p>
+      <p class="error" id="err"></p>
+    </div>
+  </div>
+
+  <script src="common.js"></script>
+  <script>
+    if (localStorage.getItem('token')) location.href = 'dashboard.html';
+    if (localStorage.getItem('dark') === '1') document.body.classList.add('dark');
+    let register = false;
+
+    $('#toggle').onclick = () => {
+      register = !register;
+      $('#name').style.display = register ? 'block' : 'none';
+      $('#go').textContent = register ? 'Create account' : 'Log in';
+      $('#subtitle').textContent = register ? 'Create your free account' : 'Log in to see your tasks';
+      $('#toggle').textContent = register ? 'Already registered? Log in' : 'New here? Create an account';
+      $('#err').textContent = '';
+    };
+
+    async function submit() {
+      try {
+        const res = await api(register ? '/auth/register' : '/auth/login', 'POST', {
+          name: $('#name').value, email: $('#email').value, password: $('#password').value,
+        });
+        localStorage.setItem('token', res.token);
+        localStorage.setItem('userName', res.name);
+        location.href = 'dashboard.html';
+      } catch (e) { $('#err').textContent = e.message; }
+    }
+    $('#go').onclick = submit;
+    $('#password').addEventListener('keydown', (e) => e.key === 'Enter' && submit());
+  </script>
+</body>
+</html>

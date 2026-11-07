@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16
+    environment: {POSTGRES_USER: campus, POSTGRES_PASSWORD: "${DB_PASSWORD:-campus}", POSTGRES_DB: campus}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: always
+  api:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://campus:${DB_PASSWORD:-campus}@db/campus
+      UPLOAD_DIR: /data/uploads
+    volumes: [uploads:/data/uploads]
+    depends_on: [db]
+    restart: always
+  caddy:            # automatic HTTPS certificates for your domain
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    env_file: .env
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile", "caddy_data:/data"]
+    depends_on: [api]
+    restart: always
+volumes: {pgdata: {}, uploads: {}, caddy_data: {}}
